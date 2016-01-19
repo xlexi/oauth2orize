@@ -34,7 +34,7 @@
   "main": "./lib",
   "dependencies": {
     "debug": "2.x.x",
-    "koa-compose": "^2.3.0",
+    "koa-compose": "^3.0.0",
     "uid2": "0.0.x",
     "utils-merge": "1.x.x"
   },
