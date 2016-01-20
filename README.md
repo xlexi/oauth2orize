@@ -1,21 +1,20 @@
-# OAuth2orize
+# OAuth2orize-koa
 
-[![Build](https://travis-ci.org/jaredhanson/oauth2orize.svg?branch=master)](https://travis-ci.org/jaredhanson/oauth2orize)
-[![Coverage](https://coveralls.io/repos/jaredhanson/oauth2orize/badge.svg?branch=master)](https://coveralls.io/r/jaredhanson/oauth2orize)
-[![Quality](https://codeclimate.com/github/jaredhanson/oauth2orize/badges/gpa.svg)](https://codeclimate.com/github/jaredhanson/oauth2orize)
-[![Dependencies](https://david-dm.org/jaredhanson/oauth2orize.svg)](https://david-dm.org/jaredhanson/oauth2orize)
+[![Build](https://travis-ci.org/ortoo/oauth2orize.svg?branch=master)](https://travis-ci.org/ortoo/oauth2orize)
+[![Coverage](https://coveralls.io/repos/ortoo/oauth2orize/badge.svg?branch=master)](https://coveralls.io/r/ortoo/oauth2orize)
+[![Quality](https://codeclimate.com/github/ortoo/oauth2orize/badges/gpa.svg)](https://codeclimate.com/github/ortoo/oauth2orize)
+[![Dependencies](https://david-dm.org/ortoo/oauth2orize.svg)](https://david-dm.org/ortoo/oauth2orize)
 [![Tips](https://img.shields.io/gratipay/jaredhanson.svg)](https://gratipay.com/jaredhanson/)
 
-
+This is a complete koa port of [OAuth2orize](https://github.com/jaredhanson/oauth2orize).
 OAuth2orize is an authorization server toolkit for Node.js.  It provides a suite
-of middleware that, combined with [Passport](http://passportjs.org/)
-authentication strategies and application-specific route handlers, can be used
+of [koa v2](https://github.com/koajs/koa) middleware that can be used
 to assemble a server that implements the [OAuth 2.0](http://tools.ietf.org/html/rfc6749)
 protocol.
 
 ## Install
 
-    $ npm install oauth2orize
+    $ npm install oauth2orize-koa
 
 ## Usage
 
@@ -37,14 +36,12 @@ A client must obtain permission from a user before it is issued an access token.
 This permission is known as a grant, the most common type of which is an
 authorization code.
 
-    server.grant(oauth2orize.grant.code(function(client, redirectURI, user, ares, done) {
+    server.grant(oauth2orize.grant.code(async function(client, redirectURI, user, ares) {
       var code = utils.uid(16);
 
       var ac = new AuthorizationCode(code, client.id, redirectURI, user.id, ares.scope);
-      ac.save(function(err) {
-        if (err) { return done(err); }
-        return done(null, code);
-      });
+      await ac.save();
+      return code;
     }));
 
 OAuth2orize also bundles support for implicit token grants.
@@ -54,19 +51,15 @@ OAuth2orize also bundles support for implicit token grants.
 After a client has obtained an authorization grant from the user, that grant can
 be exchanged for an access token.
 
-    server.exchange(oauth2orize.exchange.code(function(client, code, redirectURI, done) {
-      AuthorizationCode.findOne(code, function(err, code) {
-        if (err) { return done(err); }
-        if (client.id !== code.clientId) { return done(null, false); }
-        if (redirectURI !== code.redirectUri) { return done(null, false); }
+    server.exchange(oauth2orize.exchange.code(async function(client, code, redirectURI) {
+      code = await AuthorizationCode.findOne(code);
+      if (client.id !== code.clientId) { return false; }
+      if (redirectURI !== code.redirectUri) { return false; }
 
-        var token = utils.uid(256);
-        var at = new AccessToken(token, code.userId, code.clientId, code.scope);
-        at.save(function(err) {
-          if (err) { return done(err); }
-          return done(null, token);
-        });
-      });
+      var token = utils.uid(256);
+      var at = new AccessToken(token, code.userId, code.clientId, code.scope);
+      await at.save();
+      return token;
     }));
 
 OAuth2orize also bundles support for password and client credential grants.
@@ -79,19 +72,17 @@ When a client requests authorization, it will redirect the user to an
 authorization endpoint.  The server must authenticate the user and obtain
 their permission.
 
-    app.get('/dialog/authorize',
+    router.get('/dialog/authorize',
       login.ensureLoggedIn(),
-      server.authorize(function(clientID, redirectURI, done) {
-        Clients.findOne(clientID, function(err, client) {
-          if (err) { return done(err); }
-          if (!client) { return done(null, false); }
-          if (!client.redirectUri != redirectURI) { return done(null, false); }
-          return done(null, client, client.redirectURI);
-        });
+      server.authorize(async function(clientID, redirectURI) {
+        var client = await Clients.findOne(clientID);
+        if (!client) { return false; }
+        if (!client.redirectUri != redirectURI) { return false; }
+        return [client, client.redirectURI];
       }),
-      function(req, res) {
-        res.render('dialog', { transactionID: req.oauth2.transactionID,
-                               user: req.user, client: req.oauth2.client });
+      function(ctx) {
+        res.render('dialog', { transactionID: ctx.state.oauth2.transactionID,
+                               user: ctx.state.user, client: ctx.state.oauth2.client });
       });
 
 In this example, [connect-ensure-login](https://github.com/jaredhanson/connect-ensure-login)
@@ -100,10 +91,10 @@ authorization proceeds.  At that point, the application renders a dialog
 asking the user to grant access.  The resulting form submission is processed
 using `decision` middleware.
 
-     app.post('/dialog/authorize/decision',
+     router.post('/dialog/authorize/decision',
        login.ensureLoggedIn(),
        server.decision());
-       
+
 Based on the grant type requested by the client, the appropriate grant
 module registered above will be invoked to issue an authorization code.
 
@@ -115,15 +106,13 @@ Client serialization functions are registered to customize this process, which
 will typically be as simple as serializing the client ID, and finding the client
 by ID when deserializing.
 
-    server.serializeClient(function(client, done) {
-      return done(null, client.id);
+    server.serializeClient(function(client) {
+      return client.id;
     });
 
-    server.deserializeClient(function(id, done) {
-      Clients.findOne(id, function(err, client) {
-        if (err) { return done(err); }
-        return done(null, client);
-      });
+    server.deserializeClient(async function(id) {
+      var client = await Clients.findOne(id);
+      return client;
     });
 
 #### Implement Token Endpoint
@@ -131,7 +120,7 @@ by ID when deserializing.
 Once a user has approved access, the authorization grant can be exchanged by the
 client for an access token.
 
-    app.post('/token',
+    router.post('/token',
       passport.authenticate(['basic', 'oauth2-client-password'], { session: false }),
       server.token(),
       server.errorHandler());
@@ -139,7 +128,7 @@ client for an access token.
 [Passport](http://passportjs.org/) strategies are used to authenticate the
 client, in this case using either an HTTP Basic authentication header (as
 provided by [passport-http](https://github.com/jaredhanson/passport-http)) or
-client credentials in the request body (as provided by 
+client credentials in the request body (as provided by
 [passport-oauth2-client-password](https://github.com/jaredhanson/passport-oauth2-client-password)).
 
 Based on the grant type issued to the client, the appropriate exchange module
@@ -151,10 +140,10 @@ registered above will be invoked to issue an access token.  If an error occurs,
 Once an access token has been issued, a client will use it to make API requests
 on behalf of the user.
 
-    app.get('/api/userinfo', 
+    router.get('/api/userinfo',
       passport.authenticate('bearer', { session: false }),
-      function(req, res) {
-        res.json(req.user);
+      function(ctx) {
+        ctx.body = req.user;
       });
 
 In this example, bearer tokens are issued, which are then authenticated using
@@ -162,14 +151,12 @@ an HTTP Bearer authentication header (as provided by [passport-http-bearer](http
 
 ## Examples
 
-This [example](https://github.com/jaredhanson/oauth2orize/tree/master/examples/express2) demonstrates
+This [example](https://github.com/ortoo/oauth2orize/tree/master/examples/express2) demonstrates
 how to implement an OAuth service provider, complete with protected API access.
 
 ## Related Modules
 
-- [oauth2orize-openid](https://github.com/jaredhanson/oauth2orize-openid) — Extensions to support OpenID Connect
-- [oauth2orize-jwt-bearer](https://github.com/xtuple/oauth2orize-jwt-bearer) — Exchange JWT assertions for access tokens
-- [passport-http-bearer](https://github.com/jaredhanson/passport-http-bearer) — Bearer token authentication strategy for APIs
+- [oauth2orize-openid](https://github.com/ortoo/oauth2orize-openid) — Extensions to support OpenID Connect
 
 ## Tests
 
