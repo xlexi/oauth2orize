@@ -1,5 +1,5 @@
 {
-  "name": "oauth2orize",
+  "name": "oauth2orize-koa",
   "version": "1.2.0",
   "description": "OAuth 2.0 authorization server toolkit for Node.js.",
   "keywords": [
@@ -8,22 +8,20 @@
     "auth",
     "authz",
     "authorization",
-    "connect",
-    "express",
     "passport",
-    "middleware"
+    "middleware",
+    "koa"
   ],
   "author": {
-    "name": "Jared Hanson",
-    "email": "jaredhanson@gmail.com",
-    "url": "http://www.jaredhanson.net/"
+    "name": "James Sharp",
+    "email": "james@ortootech.com",
   },
   "repository": {
     "type": "git",
-    "url": "git://github.com/jaredhanson/oauth2orize.git"
+    "url": "git://github.com/ortoo/oauth2orize.git"
   },
   "bugs": {
-    "url": "http://github.com/jaredhanson/oauth2orize/issues"
+    "url": "http://github.com/ortoo/oauth2orize/issues"
   },
   "licenses": [
     {
@@ -43,8 +41,6 @@
     "babel-preset-stage-3": "^6.3.13",
     "babel-register": "^6.4.3",
     "chai": "1.x.x",
-    "chai-connect-middleware": "0.3.x",
-    "chai-oauth2orize-grant": "0.2.x",
     "eslint": "^1.10.3",
     "mocha": "2.x.x"
   },
