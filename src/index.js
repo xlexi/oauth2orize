@@ -1,9 +1,10 @@
 /**
  * Module dependencies.
  */
-var fs = require('fs'),
-    path = require('path'),
-    Server = require('./server');
+var fs = require('fs')
+  , path = require('path')
+  , Server = require('./server');
+
 
 /**
  * Create an OAuth 2.0 server.
@@ -24,6 +25,7 @@ exports = module.exports = createServer;
  */
 exports.createServer = createServer;
 
+
 /**
  * Export middleware.
  */
@@ -33,13 +35,11 @@ exports.errorHandler = require('./middleware/errorHandler');
  * Auto-load bundled grants.
  */
 exports.grant = {};
-
-fs.readdirSync(__dirname + '/grant').forEach(function (filename) {
+ 
+fs.readdirSync(__dirname + '/grant').forEach(function(filename) {
   if (/\.js$/.test(filename)) {
     var name = path.basename(filename, '.js');
-    var load = function () {
-      return require('./grant/' + name);
-    };
+    var load = function () { return require('./grant/' + name); };
     exports.grant.__defineGetter__(name, load);
   }
 });
@@ -52,13 +52,11 @@ exports.grant.implicit = exports.grant.token;
  * Auto-load bundled exchanges.
  */
 exports.exchange = {};
-
-fs.readdirSync(__dirname + '/exchange').forEach(function (filename) {
+ 
+fs.readdirSync(__dirname + '/exchange').forEach(function(filename) {
   if (/\.js$/.test(filename)) {
     var name = path.basename(filename, '.js');
-    var load = function () {
-      return require('./exchange/' + name);
-    };
+    var load = function () { return require('./exchange/' + name); };
     exports.exchange.__defineGetter__(name, load);
   }
 });

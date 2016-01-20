@@ -1,9 +1,8 @@
-function _asyncToGenerator(fn) { return function () { var gen = fn.apply(this, arguments); return new Promise(function (resolve, reject) { function step(key, arg) { try { var info = gen[key](arg); var value = info.value; } catch (error) { reject(error); return; } if (info.done) { resolve(value); } else { return Promise.resolve(value).then(function (value) { return step("next", value); }, function (err) { return step("throw", err); }); } } return step("next"); }); }; }
-
 /**
  * Module dependencies.
  */
 var TokenError = require('../errors/tokenerror');
+
 
 /**
  * Exchanges authorization grants for access tokens.
@@ -49,21 +48,13 @@ var TokenError = require('../errors/tokenerror');
 module.exports = function token(server, options) {
   options = options || {};
 
-  if (!server) {
-    throw new TypeError('oauth2orize.token middleware requires a server argument');
-  }
+  if (!server) { throw new TypeError('oauth2orize.token middleware requires a server argument'); }
 
-  return function () {
-    var ref = _asyncToGenerator(function* (ctx) {
-      var type = ctx.request.body.grant_type;
+  return async function token(ctx) {
+    var type = ctx.request.body.grant_type;
 
-      yield server._exchange(type, ctx, function () {
-        throw new TokenError('Unsupported grant type: ' + type, 'unsupported_grant_type');
-      });
+    await server._exchange(type, ctx, function() {
+      throw new TokenError('Unsupported grant type: ' + type, 'unsupported_grant_type');
     });
-
-    return function token(_x) {
-      return ref.apply(this, arguments);
-    };
-  }();
+  };
 };

@@ -1,10 +1,9 @@
-function _asyncToGenerator(fn) { return function () { var gen = fn.apply(this, arguments); return new Promise(function (resolve, reject) { function step(key, arg) { try { var info = gen[key](arg); var value = info.value; } catch (error) { reject(error); return; } if (info.done) { resolve(value); } else { return Promise.resolve(value).then(function (value) { return step("next", value); }, function (err) { return step("throw", err); }); } } return step("next"); }); }; }
-
 /**
  * Module dependencies.
  */
-var AuthorizationError = require('../errors/authorizationerror'),
-    ForbiddenError = require('../errors/forbiddenerror');
+var AuthorizationError = require('../errors/authorizationerror')
+  , ForbiddenError = require('../errors/forbiddenerror');
+
 
 /**
  * Handle authorization decisions from resource owners.
@@ -66,67 +65,48 @@ var AuthorizationError = require('../errors/authorizationerror'),
  * @return {Function}
  * @api protected
  */
-module.exports = function (server, options, parse) {
+module.exports = function(server, options, parse) {
   if (typeof options == 'function') {
     parse = options;
     options = undefined;
   }
   options = options || {};
-  parse = parse || function () {};
+  parse = parse || function() {};
 
-  if (!server) {
-    throw new TypeError('oauth2orize.decision middleware requires a server argument');
-  }
+  if (!server) { throw new TypeError('oauth2orize.decision middleware requires a server argument'); }
 
-  var cancelField = options.cancelField || 'cancel',
-      userProperty = options.userProperty || 'user',
-      key = options.sessionKey || 'authorize';
+  var cancelField = options.cancelField || 'cancel'
+    , userProperty = options.userProperty || 'user'
+    , key = options.sessionKey || 'authorize';
 
-  return function () {
-    var ref = _asyncToGenerator(function* (ctx, next) {
-      if (!ctx.session) {
-        throw new Error('OAuth2orize requires session support. Did you forget app.use(express.session(...))?');
+  return async function decision(ctx, next) {
+    if (!ctx.session) { throw new Error('OAuth2orize requires session support. Did you forget app.use(express.session(...))?'); }
+    if (!ctx.request.body) { throw new Error('OAuth2orize requires body parsing. Did you forget app.use(express.bodyParser())?'); }
+    if (!ctx.state.oauth2) { throw new Error('OAuth2orize requires transaction support. Did you forget oauth2orize.transactionLoader(...)?'); }
+    if (!ctx.session[key]) { throw new ForbiddenError('Unable to load OAuth 2.0 transactions from session'); }
+
+    const ares = await parse(ctx);
+
+    var tid = ctx.state.oauth2.transactionID;
+    ctx.state.oauth2.user = ctx.state[userProperty];
+    ctx.state.oauth2.res = ares || {};
+
+    if (ctx.state.oauth2.res.allow === undefined) {
+      if (!ctx.request.body[cancelField]) { ctx.state.oauth2.res.allow = true; }
+      else { ctx.state.oauth2.res.allow = false; }
+    }
+
+    try {
+      await server._respond(ctx, function() {
+        throw new AuthorizationError('Unsupported response type: ' + ctx.state.oauth2.req.type, 'unsupported_response_type');
+      });
+
+      await next();
+    } finally {
+      // Delete the transaction once we are done
+      if (ctx.session[key]) {
+        delete ctx.session[key][tid];
       }
-      if (!ctx.request.body) {
-        throw new Error('OAuth2orize requires body parsing. Did you forget app.use(express.bodyParser())?');
-      }
-      if (!ctx.state.oauth2) {
-        throw new Error('OAuth2orize requires transaction support. Did you forget oauth2orize.transactionLoader(...)?');
-      }
-      if (!ctx.session[key]) {
-        throw new ForbiddenError('Unable to load OAuth 2.0 transactions from session');
-      }
-
-      const ares = yield parse(ctx);
-
-      var tid = ctx.state.oauth2.transactionID;
-      ctx.state.oauth2.user = ctx.state[userProperty];
-      ctx.state.oauth2.res = ares || {};
-
-      if (ctx.state.oauth2.res.allow === undefined) {
-        if (!ctx.request.body[cancelField]) {
-          ctx.state.oauth2.res.allow = true;
-        } else {
-          ctx.state.oauth2.res.allow = false;
-        }
-      }
-
-      try {
-        yield server._respond(ctx, function () {
-          throw new AuthorizationError('Unsupported response type: ' + ctx.state.oauth2.req.type, 'unsupported_response_type');
-        });
-
-        yield next();
-      } finally {
-        // Delete the transaction once we are done
-        if (ctx.session[key]) {
-          delete ctx.session[key][tid];
-        }
-      }
-    });
-
-    return function decision(_x, _x2) {
-      return ref.apply(this, arguments);
-    };
-  }();
+    }
+  };
 };

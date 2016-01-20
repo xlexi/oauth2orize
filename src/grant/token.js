@@ -2,11 +2,9 @@
 /**
  * Module dependencies.
  */
+var utils = require('../utils')
+  , AuthorizationError = require('../errors/authorizationerror');
 
-function _asyncToGenerator(fn) { return function () { var gen = fn.apply(this, arguments); return new Promise(function (resolve, reject) { function step(key, arg) { try { var info = gen[key](arg); var value = info.value; } catch (error) { reject(error); return; } if (info.done) { resolve(value); } else { return Promise.resolve(value).then(function (value) { return step("next", value); }, function (err) { return step("throw", err); }); } } return step("next"); }); }; }
-
-var utils = require('../utils'),
-    AuthorizationError = require('../errors/authorizationerror');
 
 /**
  * Handles requests to obtain an implicit grant.
@@ -63,9 +61,7 @@ module.exports = function token(options, issue) {
   }
   options = options || {};
 
-  if (!issue) {
-    throw new TypeError('oauth2orize.token grant requires an issue callback');
-  }
+  if (!issue) { throw new TypeError('oauth2orize.token grant requires an issue callback'); }
 
   var modes = options.modes || {};
   if (!modes.fragment) {
@@ -79,8 +75,9 @@ module.exports = function token(options, issue) {
   // deployed.
   var separators = options.scopeSeparator || ' ';
   if (!Array.isArray(separators)) {
-    separators = [separators];
+    separators = [ separators ];
   }
+
 
   /* Parse requests that request `token` as `response_type`.
    *
@@ -88,14 +85,12 @@ module.exports = function token(options, issue) {
    * @api public
    */
   function request(ctx) {
-    var clientID = ctx.query.client_id,
-        redirectURI = ctx.query.redirect_uri,
-        scope = ctx.query.scope,
-        state = ctx.query.state;
+    var clientID = ctx.query.client_id
+      , redirectURI = ctx.query.redirect_uri
+      , scope = ctx.query.scope
+      , state = ctx.query.state;
 
-    if (!clientID) {
-      throw new AuthorizationError('Missing required parameter: client_id', 'invalid_request');
-    }
+    if (!clientID) { throw new AuthorizationError('Missing required parameter: client_id', 'invalid_request'); }
 
     if (scope) {
       for (var i = 0, len = separators.length; i < len; i++) {
@@ -108,9 +103,7 @@ module.exports = function token(options, issue) {
         }
       }
 
-      if (!Array.isArray(scope)) {
-        scope = [scope];
-      }
+      if (!Array.isArray(scope)) { scope = [ scope ]; }
     }
 
     return {
@@ -128,77 +121,61 @@ module.exports = function token(options, issue) {
    * @param {Function} next
    * @api public
    */
+  async function response(ctx) {
+    const txn = ctx.state.oauth2;
+    var mode = 'fragment'
+      , respond;
+    if (txn.req && txn.req.responseMode) {
+      mode = txn.req.responseMode;
+    }
+    respond = modes[mode];
 
-  let response = function () {
-    var ref = _asyncToGenerator(function* (ctx) {
-      const txn = ctx.state.oauth2;
-      var mode = 'fragment',
-          respond;
-      if (txn.req && txn.req.responseMode) {
-        mode = txn.req.responseMode;
-      }
-      respond = modes[mode];
+    if (!respond) {
+      // http://lists.openid.net/pipermail/openid-specs-ab/Week-of-Mon-20140317/004680.html
+      throw new AuthorizationError('Unsupported response mode: ' + mode, 'unsupported_response_mode', null, 501);
+    }
+    if (respond && respond.validate) {
+      respond.validate(txn);
+    }
 
-      if (!respond) {
-        // http://lists.openid.net/pipermail/openid-specs-ab/Week-of-Mon-20140317/004680.html
-        throw new AuthorizationError('Unsupported response mode: ' + mode, 'unsupported_response_mode', null, 501);
-      }
-      if (respond && respond.validate) {
-        respond.validate(txn);
-      }
+    if (!txn.res.allow) {
+      var params = { error: 'access_denied' };
+      if (txn.req && txn.req.state) { params.state = txn.req.state; }
+      return respond(txn, ctx.response, params);
+    }
 
-      if (!txn.res.allow) {
-        var params = { error: 'access_denied' };
-        if (txn.req && txn.req.state) {
-          params.state = txn.req.state;
-        }
-        return respond(txn, ctx.response, params);
-      }
+    // NOTE: In contrast to an authorization code grant, redirectURI is not
+    //       passed as an argument to the issue callback because it is not used
+    //       as a verifier in a subsequent token exchange.  However, when
+    //       issuing an implicit access tokens, an application must ensure that
+    //       the redirection URI is registered, which can be done in the
+    //       `validate` callback of `authorization` middleware.
 
-      // NOTE: In contrast to an authorization code grant, redirectURI is not
-      //       passed as an argument to the issue callback because it is not used
-      //       as a verifier in a subsequent token exchange.  However, when
-      //       issuing an implicit access tokens, an application must ensure that
-      //       the redirection URI is registered, which can be done in the
-      //       `validate` callback of `authorization` middleware.
+    var arity = issue.length;
+    var result;
+    if (arity == 3) {
+      result = await issue(txn.client, txn.user, txn.res);
+    } else { // arity == 2
+      result = await issue(txn.client, txn.user);
+    }
 
-      var arity = issue.length;
-      var result;
-      if (arity == 3) {
-        result = yield issue(txn.client, txn.user, txn.res);
-      } else {
-        // arity == 2
-        result = yield issue(txn.client, txn.user);
-      }
+    var accessToken = result[0];
+    params = result[1];
 
-      var accessToken = result[0];
-      params = result[1];
+    if (!accessToken) { throw new AuthorizationError('Request denied by authorization server', 'access_denied'); }
 
-      if (!accessToken) {
-        throw new AuthorizationError('Request denied by authorization server', 'access_denied');
-      }
+    var tok = {};
+    tok.access_token = accessToken;
+    if (params) { utils.merge(tok, params); }
+    tok.token_type = tok.token_type || 'Bearer';
+    if (txn.req && txn.req.state) { tok.state = txn.req.state; }
+    return respond(txn, ctx.response, tok);
+  }
 
-      var tok = {};
-      tok.access_token = accessToken;
-      if (params) {
-        utils.merge(tok, params);
-      }
-      tok.token_type = tok.token_type || 'Bearer';
-      if (txn.req && txn.req.state) {
-        tok.state = txn.req.state;
-      }
-      return respond(txn, ctx.response, tok);
-    });
-
-    return function response(_x) {
-      return ref.apply(this, arguments);
-    };
-  }();
 
   /**
    * Return `token` approval module.
    */
-
   var mod = {};
   mod.name = 'token';
   mod.request = request;

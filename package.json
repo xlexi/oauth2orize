@@ -37,6 +37,7 @@
     "utils-merge": "1.x.x"
   },
   "devDependencies": {
+    "babel-cli": "^6.4.5",
     "babel-eslint": "^4.1.6",
     "babel-preset-stage-3": "^6.3.13",
     "babel-register": "^6.4.3",
@@ -48,6 +49,9 @@
     "node": ">= 0.4.0"
   },
   "scripts": {
+    "version": "node_modules/.bin/babel src --out-dir lib",
+    "postversion": "git push && git push --tags",
+    "pretest": "node_modules/.bin/babel src --out-dir lib",
     "test": "node_modules/.bin/mocha --reporter spec --require test/bootstrap/node test/*.test.js test/**/*.test.js"
   }
 }

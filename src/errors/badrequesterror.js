@@ -16,6 +16,7 @@ function BadRequestError(message) {
  */
 BadRequestError.prototype.__proto__ = Error.prototype;
 
+
 /**
  * Expose `BadRequestError`.
  */

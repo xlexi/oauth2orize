@@ -16,6 +16,7 @@ function OAuth2Error(message, code, uri, status) {
  */
 OAuth2Error.prototype.__proto__ = Error.prototype;
 
+
 /**
  * Expose `OAuth2Error`.
  */

@@ -22,3 +22,6 @@ npm-debug.log
 .jshintrc
 .travis.yml
 .eslintrc
+
+# Source
+src

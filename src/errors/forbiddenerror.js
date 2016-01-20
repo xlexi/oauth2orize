@@ -16,6 +16,7 @@ function ForbiddenError(message) {
  */
 ForbiddenError.prototype.__proto__ = Error.prototype;
 
+
 /**
  * Expose `ForbiddenError`.
  */
