@@ -40,6 +40,8 @@
   },
   "devDependencies": {
     "babel-eslint": "^4.1.6",
+    "babel-preset-stage-3": "^6.3.13",
+    "babel-register": "^6.4.3",
     "chai": "1.x.x",
     "chai-connect-middleware": "0.3.x",
     "chai-oauth2orize-grant": "0.2.x",

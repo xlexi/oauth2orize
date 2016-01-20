@@ -2,574 +2,577 @@
 /* jshint camelcase: false, expr: true, sub: true */
 
 var chai = require('chai')
+  , Context = require('../context')
   , authorization = require('../../lib/middleware/authorization')
   , Server = require('../../lib/server');
 
 
 describe('authorization', function() {
-  
+
   var server = new Server();
-  server.serializeClient(function(client, done) {
-    return done(null, client.id);
+  server.serializeClient(function(client) {
+    return client.id;
   });
-  
-  server.grant('code', function(req) {
+
+  server.grant('code', function(ctx) {
     return {
-      clientID: req.query['client_id'],
-      redirectURI: req.query['redirect_uri'],
-      scope: req.query['scope']
+      clientID: ctx.query['client_id'],
+      redirectURI: ctx.query['redirect_uri'],
+      scope: ctx.query['scope']
     };
   });
-  server.grant('code', 'response', function(txn, res, next) {
+  server.grant('code', 'response', function(ctx) {
+    var txn = ctx.state.oauth2;
     if ((txn.client.id == '1234' || txn.client.id == '2234') && txn.user.id == 'u123' && txn.res.allow === true && txn.res.scope === 'read') {
-      return res.redirect(txn.redirectURI);
+      return ctx.redirect(txn.redirectURI);
     }
-    return next(new Error('something went wrong while sending response'));
+    throw new Error('something went wrong while sending response');
   });
-  
-  server.grant('foo', function(req) {
+
+  server.grant('foo', function(ctx) {
     return {
-      clientID: req.query['client_id'],
-      redirectURI: req.query['redirect_uri'],
-      scope: req.query['scope']
+      clientID: ctx.query['client_id'],
+      redirectURI: ctx.query['redirect_uri'],
+      scope: ctx.query['scope']
     };
   });
-  
-  function validate(clientID, redirectURI, done) {
-    return done(null, { id: clientID }, 'http://example.com/auth/callback');
+
+  function validate(clientID, redirectURI) {
+    return [{ id: clientID }, 'http://example.com/auth/callback'];
   }
-  
-  function immediate(client, user, done) {
+
+  function immediate(client, user) {
     if (client.id == '1234' && user.id == 'u123') {
-      return done(null, true, { scope: 'read' });
+      return [true, { scope: 'read' }];
     } else if (client.id == '2234' && user.id == 'u123') {
-      return done(null, false);
+      return [false];
     } else if (client.id == 'T234' && user.id == 'u123') {
       throw new Error('something was thrown while checking immediate status');
     } else if (client.id == 'ER34' && user.id == 'u123') {
-      return done(null, true, { scope: 'read' });
+      return [true, { scope: 'read' }];
     }
-    return done(new Error('something went wrong while checking immediate status'));
+    throw new Error('something went wrong while checking immediate status');
   }
-  
+
   describe('handling a request that is immediately authorized', function() {
-    var request, response, err;
+    var ctx, err;
 
-    before(function(done) {
-      chai.connect.use('express', authorization(server, validate, immediate))
-        .req(function(req) {
-          request = req;
-          req.query = { response_type: 'code', client_id: '1234', redirect_uri: 'http://example.com/auth/callback' };
-          req.session = {};
-          req.user = { id: 'u123' };
-        })
-        .end(function(res) {
-          response = res;
-          done();
-        })
-        .dispatch();
+    before(async function(done) {
+      ctx = new Context();
+      ctx.request.query = { response_type: 'code', client_id: '1234', redirect_uri: 'http://example.com/auth/callback' };
+      ctx.session = {};
+      ctx.state.user = { id: 'u123' };
+
+      try{
+        await authorization(server, validate, immediate)(ctx);
+      } catch(e) {
+        err = e;
+      }
+
+      done();
     });
-    
+
     it('should not error', function() {
       expect(err).to.be.undefined;
     });
-    
+
     it('should respond', function() {
-      expect(response.getHeader('Location')).to.equal('http://example.com/auth/callback');
+      expect(ctx.response.get('Location')).to.equal('http://example.com/auth/callback');
     });
-    
+
     it('should add transaction', function() {
-      expect(request.oauth2).to.be.an('object');
+      expect(ctx.state.oauth2).to.be.an('object');
     });
-    
+
     it('should not store transaction in session', function() {
-      expect(request.session['authorize']).to.be.undefined;
+      expect(ctx.session['authorize']).to.be.undefined;
     });
   });
-  
-  describe('handling a request that is not immediately authorized', function() {
-    var request, err;
 
-    before(function(done) {
-      chai.connect.use(authorization(server, validate, immediate))
-        .req(function(req) {
-          request = req;
-          req.query = { response_type: 'code', client_id: '2234', redirect_uri: 'http://example.com/auth/callback' };
-          req.session = {};
-          req.user = { id: 'u123' };
-        })
-        .next(function(e) {
-          err = e;
-          done();
-        })
-        .dispatch();
+  describe('handling a request that is not immediately authorized', function() {
+    var ctx, err;
+
+    before(async function(done) {
+      ctx = new Context();
+      ctx.request.query = { response_type: 'code', client_id: '2234', redirect_uri: 'http://example.com/auth/callback' };
+      ctx.session = {};
+      ctx.state.user = { id: 'u123' };
+
+      try{
+        await authorization(server, validate, immediate)(ctx);
+      } catch(e) {
+        err = e;
+      }
+
+      done();
     });
-    
+
     it('should not error', function() {
       expect(err).to.be.undefined;
     });
-    
+
     it('should add transaction', function() {
-      expect(request.oauth2).to.be.an('object');
+      expect(ctx.state.oauth2).to.be.an('object');
     });
-    
+
     it('should store transaction in session', function() {
-      var tid = request.oauth2.transactionID;
-      expect(request.session['authorize'][tid]).to.be.an('object');
-      expect(request.session['authorize'][tid].protocol).to.equal('oauth2');
-      expect(request.session['authorize'][tid].client).to.equal('2234');
-      expect(request.session['authorize'][tid].redirectURI).to.equal('http://example.com/auth/callback');
-      expect(request.session['authorize'][tid].req.type).to.equal('code');
-      expect(request.session['authorize'][tid].req.clientID).to.equal('2234');
-      expect(request.session['authorize'][tid].req.redirectURI).to.equal('http://example.com/auth/callback');
+      var tid = ctx.state.oauth2.transactionID;
+      expect(ctx.session['authorize'][tid]).to.be.an('object');
+      expect(ctx.session['authorize'][tid].protocol).to.equal('oauth2');
+      expect(ctx.session['authorize'][tid].client).to.equal('2234');
+      expect(ctx.session['authorize'][tid].redirectURI).to.equal('http://example.com/auth/callback');
+      expect(ctx.session['authorize'][tid].req.type).to.equal('code');
+      expect(ctx.session['authorize'][tid].req.clientID).to.equal('2234');
+      expect(ctx.session['authorize'][tid].req.redirectURI).to.equal('http://example.com/auth/callback');
     });
   });
-  
-  describe('handling a request that encounters an error while checking immediate status', function() {
-    var request, err;
 
-    before(function(done) {
-      chai.connect.use(authorization(server, validate, immediate))
-        .req(function(req) {
-          request = req;
-          req.query = { response_type: 'code', client_id: 'X234', redirect_uri: 'http://example.com/auth/callback' };
-          req.session = {};
-          req.user = { id: 'u123' };
-        })
-        .next(function(e) {
-          err = e;
-          done();
-        })
-        .dispatch();
+  describe('handling a request that encounters an error while checking immediate status', function() {
+    var ctx, err;
+
+    before(async function(done) {
+      ctx = new Context();
+      ctx.request.query = { response_type: 'code', client_id: 'X234', redirect_uri: 'http://example.com/auth/callback' };
+      ctx.session = {};
+      ctx.state.user = { id: 'u123' };
+
+      try{
+        await authorization(server, validate, immediate)(ctx);
+      } catch(e) {
+        err = e;
+      }
+
+      done();
     });
-    
+
     it('should error', function() {
       expect(err).to.be.an.instanceOf(Error);
       expect(err.message).to.equal('something went wrong while checking immediate status');
     });
-    
+
     it('should add transaction', function() {
-      expect(request.oauth2).to.be.an('object');
+      expect(ctx.state.oauth2).to.be.an('object');
     });
-    
+
     it('should not store transaction in session', function() {
-      expect(request.session['authorize']).to.be.undefined;
+      expect(ctx.session['authorize']).to.be.undefined;
     });
   });
-  
-  describe('handling a request that throws an error while checking immediate status', function() {
-    var request, err;
 
-    before(function(done) {
-      chai.connect.use(authorization(server, validate, immediate))
-        .req(function(req) {
-          request = req;
-          req.query = { response_type: 'code', client_id: 'T234', redirect_uri: 'http://example.com/auth/callback' };
-          req.session = {};
-          req.user = { id: 'u123' };
-        })
-        .next(function(e) {
-          err = e;
-          done();
-        })
-        .dispatch();
+  describe('handling a request that throws an error while checking immediate status', function() {
+    var ctx, err;
+
+    before(async function(done) {
+      ctx = new Context();
+      ctx.request.query = { response_type: 'code', client_id: 'T234', redirect_uri: 'http://example.com/auth/callback' };
+      ctx.session = {};
+      ctx.state.user = { id: 'u123' };
+
+      try{
+        await authorization(server, validate, immediate)(ctx);
+      } catch(e) {
+        err = e;
+      }
+
+      done();
     });
-    
+
     it('should error', function() {
       expect(err).to.be.an.instanceOf(Error);
       expect(err.message).to.equal('something was thrown while checking immediate status');
     });
-    
+
     it('should add transaction', function() {
-      expect(request.oauth2).to.be.an('object');
+      expect(ctx.state.oauth2).to.be.an('object');
     });
-    
+
     it('should not store transaction in session', function() {
-      expect(request.session['authorize']).to.be.undefined;
+      expect(ctx.session['authorize']).to.be.undefined;
     });
   });
-  
-  describe('handling a request that is immediately authorized but encounters an error while responding', function() {
-    var request, err;
 
-    before(function(done) {
-      chai.connect.use(authorization(server, validate, immediate))
-        .req(function(req) {
-          request = req;
-          req.query = { response_type: 'code', client_id: 'ER34', redirect_uri: 'http://example.com/auth/callback' };
-          req.session = {};
-          req.user = { id: 'u123' };
-        })
-        .next(function(e) {
-          err = e;
-          done();
-        })
-        .dispatch();
+  describe('handling a request that is immediately authorized but encounters an error while responding', function() {
+    var ctx, err;
+
+    before(async function(done) {
+      ctx = new Context();
+      ctx.request.query = { response_type: 'code', client_id: 'ER34', redirect_uri: 'http://example.com/auth/callback' };
+      ctx.session = {};
+      ctx.state.user = { id: 'u123' };
+
+      try{
+        await authorization(server, validate, immediate)(ctx);
+      } catch(e) {
+        err = e;
+      }
+
+      done();
     });
-    
+
     it('should error', function() {
       expect(err).to.be.an.instanceOf(Error);
       expect(err.message).to.equal('something went wrong while sending response');
     });
-    
+
     it('should add transaction', function() {
-      expect(request.oauth2).to.be.an('object');
+      expect(ctx.state.oauth2).to.be.an('object');
     });
-    
+
     it('should not store transaction in session', function() {
-      expect(request.session['authorize']).to.be.undefined;
+      expect(ctx.session['authorize']).to.be.undefined;
     });
   });
-  
-  describe('handling a request that is immediately authorized but unable to respond', function() {
-    var request, err;
 
-    before(function(done) {
-      chai.connect.use(authorization(server, validate, immediate))
-        .req(function(req) {
-          request = req;
-          req.query = { response_type: 'foo', client_id: '1234', redirect_uri: 'http://example.com/auth/callback' };
-          req.session = {};
-          req.user = { id: 'u123' };
-        })
-        .next(function(e) {
-          err = e;
-          done();
-        })
-        .dispatch();
+  describe('handling a request that is immediately authorized but unable to respond', function() {
+    var ctx, err;
+
+    before(async function(done) {
+      ctx = new Context();
+      ctx.request.query = { response_type: 'foo', client_id: '1234', redirect_uri: 'http://example.com/auth/callback' };
+      ctx.session = {};
+      ctx.state.user = { id: 'u123' };
+
+      try{
+        await authorization(server, validate, immediate)(ctx);
+      } catch(e) {
+        err = e;
+      }
+
+      done();
     });
-    
+
     it('should error', function() {
       expect(err).to.be.an.instanceOf(Error);
       expect(err.message).to.equal('Unsupported response type: foo');
     });
-    
+
     it('should add transaction', function() {
-      expect(request.oauth2).to.be.an('object');
+      expect(ctx.state.oauth2).to.be.an('object');
     });
-    
+
     it('should not store transaction in session', function() {
-      expect(request.session['authorize']).to.be.undefined;
+      expect(ctx.session['authorize']).to.be.undefined;
     });
   });
-  
+
   describe('immediate callback with scope', function() {
     describe('handling a request that is immediately authorized', function() {
-      var request, response, err;
+      var ctx, err;
 
-      function immediate(client, user, scope, done) {
+      function immediate(client, user, scope) {
         if (client.id == '1234' && user.id == 'u123' && scope == 'profile') {
-          return done(null, true, { scope: 'read' });
+          return [true, { scope: 'read' }];
         }
-        return done(new Error('something went wrong while checking immediate status'));
+        throw new Error('something went wrong while checking immediate status');
       }
 
-      before(function(done) {
-        chai.connect.use('express', authorization(server, validate, immediate))
-          .req(function(req) {
-            request = req;
-            req.query = { response_type: 'code', client_id: '1234', redirect_uri: 'http://example.com/auth/callback', scope: 'profile' };
-            req.session = {};
-            req.user = { id: 'u123' };
-          })
-          .end(function(res) {
-            response = res;
-            done();
-          })
-          .dispatch();
+      before(async function(done) {
+        ctx = new Context();
+        ctx.request.query = { response_type: 'code', client_id: '1234', redirect_uri: 'http://example.com/auth/callback', scope: 'profile' };
+        ctx.session = {};
+        ctx.state.user = { id: 'u123' };
+
+        try{
+          await authorization(server, validate, immediate)(ctx);
+        } catch(e) {
+          err = e;
+        }
+
+        done();
       });
-    
+
       it('should not error', function() {
         expect(err).to.be.undefined;
       });
-    
+
       it('should respond', function() {
-        expect(response.getHeader('Location')).to.equal('http://example.com/auth/callback');
+        expect(ctx.response.get('Location')).to.equal('http://example.com/auth/callback');
       });
-    
+
       it('should add transaction', function() {
-        expect(request.oauth2).to.be.an('object');
-        expect(request.oauth2.res).to.be.an('object');
-        expect(request.oauth2.res.allow).to.equal(true);
-        expect(request.oauth2.res.scope).to.equal('read');
-        expect(request.oauth2.info).to.be.undefined;
+        expect(ctx.state.oauth2).to.be.an('object');
+        expect(ctx.state.oauth2.res).to.be.an('object');
+        expect(ctx.state.oauth2.res.allow).to.equal(true);
+        expect(ctx.state.oauth2.res.scope).to.equal('read');
+        expect(ctx.state.oauth2.info).to.be.undefined;
       });
-    
+
       it('should not store transaction in session', function() {
-        expect(request.session['authorize']).to.be.undefined;
+        expect(ctx.session['authorize']).to.be.undefined;
       });
     });
-    
-    describe('handling a request that is not immediately authorized', function() {
-      var request, response, err;
 
-      function immediate(client, user, scope, done) {
+    describe('handling a request that is not immediately authorized', function() {
+      var ctx, err;
+
+      function immediate(client, user, scope) {
         if (client.id == '1234' && user.id == 'u123' && scope == 'profile') {
-          return done(null, false, { scope: 'read', format: 'application/jwt' });
+          return [false, { scope: 'read', format: 'application/jwt' }];
         }
-        return done(new Error('something went wrong while checking immediate status'));
+        throw new Error('something went wrong while checking immediate status');
       }
 
-      before(function(done) {
-        chai.connect.use('express', authorization(server, validate, immediate))
-          .req(function(req) {
-            request = req;
-            req.query = { response_type: 'code', client_id: '1234', redirect_uri: 'http://example.com/auth/callback', scope: 'profile' };
-            req.session = {};
-            req.user = { id: 'u123' };
-          })
-          .next(function(e) {
-            err = e;
-            done();
-          })
-          .dispatch();
+      before(async function(done) {
+        ctx = new Context();
+        ctx.request.query = { response_type: 'code', client_id: '1234', redirect_uri: 'http://example.com/auth/callback', scope: 'profile' };
+        ctx.session = {};
+        ctx.state.user = { id: 'u123' };
+
+        try{
+          await authorization(server, validate, immediate)(ctx);
+        } catch(e) {
+          err = e;
+        }
+
+        done();
       });
-    
+
       it('should not error', function() {
         expect(err).to.be.undefined;
       });
-    
+
       it('should add transaction', function() {
-        expect(request.oauth2).to.be.an('object');
-        expect(request.oauth2.res).to.be.undefined;
-        expect(request.oauth2.info).to.be.an('object');
-        expect(request.oauth2.info.format).to.equal('application/jwt');
-        expect(request.oauth2.info.scope).to.equal('read');
+        expect(ctx.state.oauth2).to.be.an('object');
+        expect(ctx.state.oauth2.res).to.be.undefined;
+        expect(ctx.state.oauth2.info).to.be.an('object');
+        expect(ctx.state.oauth2.info.format).to.equal('application/jwt');
+        expect(ctx.state.oauth2.info.scope).to.equal('read');
       });
-    
+
       it('should store transaction in session', function() {
-        var tid = request.oauth2.transactionID;
-        expect(request.session['authorize'][tid]).to.be.an('object');
-        expect(request.session['authorize'][tid].protocol).to.equal('oauth2');
-        expect(request.session['authorize'][tid].client).to.equal('1234');
-        expect(request.session['authorize'][tid].redirectURI).to.equal('http://example.com/auth/callback');
-        expect(request.session['authorize'][tid].req.type).to.equal('code');
-        expect(request.session['authorize'][tid].req.clientID).to.equal('1234');
-        expect(request.session['authorize'][tid].req.redirectURI).to.equal('http://example.com/auth/callback');
-        expect(request.session['authorize'][tid].info.format).to.equal('application/jwt');
-        expect(request.session['authorize'][tid].info.scope).to.equal('read');
+        var tid = ctx.state.oauth2.transactionID;
+        expect(ctx.session['authorize'][tid]).to.be.an('object');
+        expect(ctx.session['authorize'][tid].protocol).to.equal('oauth2');
+        expect(ctx.session['authorize'][tid].client).to.equal('1234');
+        expect(ctx.session['authorize'][tid].redirectURI).to.equal('http://example.com/auth/callback');
+        expect(ctx.session['authorize'][tid].req.type).to.equal('code');
+        expect(ctx.session['authorize'][tid].req.clientID).to.equal('1234');
+        expect(ctx.session['authorize'][tid].req.redirectURI).to.equal('http://example.com/auth/callback');
+        expect(ctx.session['authorize'][tid].info.format).to.equal('application/jwt');
+        expect(ctx.session['authorize'][tid].info.scope).to.equal('read');
       });
     });
   });
-  
+
   describe('immediate callback with scope and locals', function() {
     describe('handling a request that is immediately authorized', function() {
-      var request, response, err;
+      var ctx, err;
 
-      function immediate(client, user, scope, done) {
+      function immediate(client, user, scope) {
         if (client.id == '1234' && user.id == 'u123' && scope == 'profile') {
-          return done(null, true, { scope: 'read' }, { beep: 'boop' });
+          return [true, { scope: 'read' }, { beep: 'boop' }];
         }
-        return done(new Error('something went wrong while checking immediate status'));
+        throw new Error('something went wrong while checking immediate status');
       }
 
-      before(function(done) {
-        chai.connect.use('express', authorization(server, validate, immediate))
-          .req(function(req) {
-            request = req;
-            req.query = { response_type: 'code', client_id: '1234', redirect_uri: 'http://example.com/auth/callback', scope: 'profile' };
-            req.session = {};
-            req.user = { id: 'u123' };
-          })
-          .end(function(res) {
-            response = res;
-            done();
-          })
-          .dispatch();
+      before(async function(done) {
+        ctx = new Context();
+        ctx.request.query = { response_type: 'code', client_id: '1234', redirect_uri: 'http://example.com/auth/callback', scope: 'profile' };
+        ctx.session = {};
+        ctx.state.user = { id: 'u123' };
+
+        try{
+          await authorization(server, validate, immediate)(ctx);
+        } catch(e) {
+          err = e;
+        }
+
+        done();
       });
-    
+
       it('should not error', function() {
         expect(err).to.be.undefined;
       });
-    
+
       it('should respond', function() {
-        expect(response.getHeader('Location')).to.equal('http://example.com/auth/callback');
+        expect(ctx.response.get('Location')).to.equal('http://example.com/auth/callback');
       });
-    
+
       it('should add transaction', function() {
-        expect(request.oauth2).to.be.an('object');
-        expect(request.oauth2.res).to.be.an('object');
-        expect(request.oauth2.res.allow).to.equal(true);
-        expect(request.oauth2.res.scope).to.equal('read');
-        expect(request.oauth2.info).to.be.undefined;
-        expect(request.oauth2.locals).to.be.undefined;
+        expect(ctx.state.oauth2).to.be.an('object');
+        expect(ctx.state.oauth2.res).to.be.an('object');
+        expect(ctx.state.oauth2.res.allow).to.equal(true);
+        expect(ctx.state.oauth2.res.scope).to.equal('read');
+        expect(ctx.state.oauth2.info).to.be.undefined;
+        expect(ctx.state.oauth2.locals).to.be.undefined;
       });
-    
+
       it('should not store transaction in session', function() {
-        expect(request.session['authorize']).to.be.undefined;
+        expect(ctx.session['authorize']).to.be.undefined;
       });
     });
-    
+
     describe('handling a request that is not immediately authorized', function() {
-      var request, response, err;
+      var ctx, err;
 
-      function immediate(client, user, scope, done) {
+      function immediate(client, user, scope) {
         if (client.id == '1234' && user.id == 'u123' && scope == 'profile') {
-          return done(null, false, { scope: 'read', format: 'application/jwt' }, { beep: 'boop' });
+          return [false, { scope: 'read', format: 'application/jwt' }, { beep: 'boop' }];
         }
-        return done(new Error('something went wrong while checking immediate status'));
+        throw new Error('something went wrong while checking immediate status');
       }
 
-      before(function(done) {
-        chai.connect.use('express', authorization(server, validate, immediate))
-          .req(function(req) {
-            request = req;
-            req.query = { response_type: 'code', client_id: '1234', redirect_uri: 'http://example.com/auth/callback', scope: 'profile' };
-            req.session = {};
-            req.user = { id: 'u123' };
-          })
-          .next(function(e) {
-            err = e;
-            done();
-          })
-          .dispatch();
+      before(async function(done) {
+        ctx = new Context();
+        ctx.request.query = { response_type: 'code', client_id: '1234', redirect_uri: 'http://example.com/auth/callback', scope: 'profile' };
+        ctx.session = {};
+        ctx.state.user = { id: 'u123' };
+
+        try{
+          await authorization(server, validate, immediate)(ctx);
+        } catch(e) {
+          err = e;
+        }
+
+        done();
       });
-    
+
       it('should not error', function() {
         expect(err).to.be.undefined;
       });
-    
+
       it('should add transaction', function() {
-        expect(request.oauth2).to.be.an('object');
-        expect(request.oauth2.res).to.be.undefined;
-        expect(request.oauth2.info).to.be.an('object');
-        expect(request.oauth2.info.format).to.equal('application/jwt');
-        expect(request.oauth2.info.scope).to.equal('read');
-        expect(request.oauth2.locals).to.be.an('object');
-        expect(request.oauth2.locals.beep).to.equal('boop');
+        expect(ctx.state.oauth2).to.be.an('object');
+        expect(ctx.state.oauth2.res).to.be.undefined;
+        expect(ctx.state.oauth2.info).to.be.an('object');
+        expect(ctx.state.oauth2.info.format).to.equal('application/jwt');
+        expect(ctx.state.oauth2.info.scope).to.equal('read');
+        expect(ctx.state.oauth2.locals).to.be.an('object');
+        expect(ctx.state.oauth2.locals.beep).to.equal('boop');
       });
-    
+
       it('should store transaction in session', function() {
-        var tid = request.oauth2.transactionID;
-        expect(request.session['authorize'][tid]).to.be.an('object');
-        expect(request.session['authorize'][tid].protocol).to.equal('oauth2');
-        expect(request.session['authorize'][tid].client).to.equal('1234');
-        expect(request.session['authorize'][tid].redirectURI).to.equal('http://example.com/auth/callback');
-        expect(request.session['authorize'][tid].req.type).to.equal('code');
-        expect(request.session['authorize'][tid].req.clientID).to.equal('1234');
-        expect(request.session['authorize'][tid].req.redirectURI).to.equal('http://example.com/auth/callback');
-        expect(request.session['authorize'][tid].info.format).to.equal('application/jwt');
-        expect(request.session['authorize'][tid].info.scope).to.equal('read');
-        expect(request.session['authorize'][tid].locals).to.be.undefined;
+        var tid = ctx.state.oauth2.transactionID;
+        expect(ctx.session['authorize'][tid]).to.be.an('object');
+        expect(ctx.session['authorize'][tid].protocol).to.equal('oauth2');
+        expect(ctx.session['authorize'][tid].client).to.equal('1234');
+        expect(ctx.session['authorize'][tid].redirectURI).to.equal('http://example.com/auth/callback');
+        expect(ctx.session['authorize'][tid].req.type).to.equal('code');
+        expect(ctx.session['authorize'][tid].req.clientID).to.equal('1234');
+        expect(ctx.session['authorize'][tid].req.redirectURI).to.equal('http://example.com/auth/callback');
+        expect(ctx.session['authorize'][tid].info.format).to.equal('application/jwt');
+        expect(ctx.session['authorize'][tid].info.scope).to.equal('read');
+        expect(ctx.session['authorize'][tid].locals).to.be.undefined;
       });
     });
   });
-  
-  describe('immediate callback with scope and type', function() {
+('immediate callback with scope and type', function() {
     describe('handling a request that is immediately authorized', function() {
-      var request, response, err;
+      var ctx, err;
 
-      function immediate(client, user, scope, type, done) {
+      function immediate(client, user, scope, type) {
         if (client.id == '1234' && user.id == 'u123' && scope == 'profile' && type == 'code') {
-          return done(null, true, { scope: 'read' });
+          return [true, { scope: 'read' }];
         }
-        return done(new Error('something went wrong while checking immediate status'));
+        throw new Error('something went wrong while checking immediate status');
       }
 
-      before(function(done) {
-        chai.connect.use('express', authorization(server, validate, immediate))
-          .req(function(req) {
-            request = req;
-            req.query = { response_type: 'code', client_id: '1234', redirect_uri: 'http://example.com/auth/callback', scope: 'profile' };
-            req.session = {};
-            req.user = { id: 'u123' };
-          })
-          .end(function(res) {
-            response = res;
-            done();
-          })
-          .dispatch();
+      before(async function(done) {
+        ctx = new Context();
+        ctx.request.query = { response_type: 'code', client_id: '1234', redirect_uri: 'http://example.com/auth/callback', scope: 'profile' };
+        ctx.session = {};
+        ctx.state.user = { id: 'u123' };
+
+        try{
+          await authorization(server, validate, immediate)(ctx);
+        } catch(e) {
+          err = e;
+        }
+
+        done();
       });
-    
+
       it('should not error', function() {
         expect(err).to.be.undefined;
       });
-    
+
       it('should respond', function() {
-        expect(response.getHeader('Location')).to.equal('http://example.com/auth/callback');
+        expect(ctx.response.get('Location')).to.equal('http://example.com/auth/callback');
       });
-    
+
       it('should add transaction', function() {
-        expect(request.oauth2).to.be.an('object');
-        expect(request.oauth2.res).to.be.an('object');
-        expect(request.oauth2.res.allow).to.equal(true);
-        expect(request.oauth2.res.scope).to.equal('read');
-        expect(request.oauth2.info).to.be.undefined;
+        expect(ctx.state.oauth2).to.be.an('object');
+        expect(ctx.state.oauth2.res).to.be.an('object');
+        expect(ctx.state.oauth2.res.allow).to.equal(true);
+        expect(ctx.state.oauth2.res.scope).to.equal('read');
+        expect(ctx.state.oauth2.info).to.be.undefined;
       });
-    
+
       it('should not store transaction in session', function() {
-        expect(request.session['authorize']).to.be.undefined;
+        expect(ctx.session['authorize']).to.be.undefined;
       });
     });
   });
-  
+
   describe('immediate callback with scope and type and extensions', function() {
     describe('handling a request that is immediately authorized', function() {
-      var request, response, err;
+      var ctx, err;
 
       var server = new Server();
-      server.grant('code', function(req) {
+      server.grant('code', function(ctx) {
         return {
-          clientID: req.query['client_id'],
-          redirectURI: req.query['redirect_uri'],
-          scope: req.query['scope']
-        };
-      });
-      server.grant('code', 'response', function(txn, res, next) {
-        if ((txn.client.id == '1234' || txn.client.id == '2234') && txn.user.id == 'u123' && txn.res.allow === true && txn.res.scope === 'read') {
-          return res.redirect(txn.redirectURI);
-        }
-        return next(new Error('something went wrong while sending response'));
-      });
-      
-      server.grant('*', function(req) {
-        return {
-          audience: req.query['audience']
+          clientID: ctx.request.query['client_id'],
+          redirectURI: ctx.request.query['redirect_uri'],
+          scope: ctx.request.query['scope']
         };
       });
 
-      function immediate(client, user, scope, type, ext, done) {
-        if (client.id == '1234' && user.id == 'u123' && scope == 'profile' && type == 'code' && ext.audience == 'https://api.example.com/') {
-          return done(null, true, { scope: 'read' });
+      server.grant('code', 'response', function(ctx) {
+        var txn = ctx.state.oauth2;
+        if ((txn.client.id == '1234' || txn.client.id == '2234') && txn.user.id == 'u123' && txn.res.allow === true && txn.res.scope === 'read') {
+          return ctx.redirect(txn.redirectURI);
         }
-        return done(new Error('something went wrong while checking immediate status'));
+        throw new Error('something went wrong while sending response');
+      });
+
+      server.grant('*', function(ctx) {
+        return {
+          audience: ctx.request.query['audience']
+        };
+      });
+
+      function immediate(client, user, scope, type, ext) {
+        if (client.id == '1234' && user.id == 'u123' && scope == 'profile' && type == 'code' && ext.audience == 'https://api.example.com/') {
+          return [true, { scope: 'read' }];
+        }
+        throw new Error('something went wrong while checking immediate status');
       }
 
-      before(function(done) {
-        chai.connect.use('express', authorization(server, validate, immediate))
-          .req(function(req) {
-            request = req;
-            req.query = { response_type: 'code', client_id: '1234', redirect_uri: 'http://example.com/auth/callback', scope: 'profile', audience: 'https://api.example.com/' };
-            req.session = {};
-            req.user = { id: 'u123' };
-          })
-          .end(function(res) {
-            response = res;
-            done();
-          })
-          .dispatch();
+      before(async function(done) {
+        ctx = new Context();
+        ctx.request.query = { response_type: 'code', client_id: '1234', redirect_uri: 'http://example.com/auth/callback', scope: 'profile', audience: 'https://api.example.com/' };
+        ctx.session = {};
+        ctx.state.user = { id: 'u123' };
+
+        try{
+          await authorization(server, validate, immediate)(ctx);
+        } catch(e) {
+          err = e;
+        }
+
+        done();
       });
-    
+
       it('should not error', function() {
         expect(err).to.be.undefined;
       });
-    
+
       it('should respond', function() {
-        expect(response.getHeader('Location')).to.equal('http://example.com/auth/callback');
+        expect(ctx.response.get('Location')).to.equal('http://example.com/auth/callback');
       });
-    
+
       it('should add transaction', function() {
-        expect(request.oauth2).to.be.an('object');
-        expect(request.oauth2.res).to.be.an('object');
-        expect(request.oauth2.res.allow).to.equal(true);
-        expect(request.oauth2.res.scope).to.equal('read');
-        expect(request.oauth2.info).to.be.undefined;
+        expect(ctx.state.oauth2).to.be.an('object');
+        expect(ctx.state.oauth2.res).to.be.an('object');
+        expect(ctx.state.oauth2.res.allow).to.equal(true);
+        expect(ctx.state.oauth2.res.scope).to.equal('read');
+        expect(ctx.state.oauth2.info).to.be.undefined;
       });
-    
+
       it('should not store transaction in session', function() {
-        expect(request.session['authorize']).to.be.undefined;
+        expect(ctx.session['authorize']).to.be.undefined;
       });
     });
   });
-  
+
 });
