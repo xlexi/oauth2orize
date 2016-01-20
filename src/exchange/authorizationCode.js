@@ -86,9 +86,14 @@ module.exports = function(options, issue) {
       result = await issue(client, code, redirectURI);
     }
 
-    var accessToken = result[0];
-    var refreshToken = result[1];
-    var params = result[2];
+    var accessToken, refreshToken, params;
+    if (Array.isArray(result)) {
+      accessToken = result[0];
+      refreshToken = result[1];
+      params = result[2];
+    } else {
+      accessToken = result;
+    }
 
     if (!accessToken) { throw new TokenError('Invalid authorization code', 'invalid_grant'); }
     if (refreshToken && typeof refreshToken == 'object') {

@@ -106,9 +106,14 @@ module.exports = function(options, issue) {
       result = await issue(client, refreshToken);
     }
 
-    var accessToken = result[0];
-    refreshToken = result[1];
-    var params = result[2];
+    var accessToken, params;
+    if (Array.isArray(result)) {
+      accessToken = result[0];
+      refreshToken = result[1];
+      params = result[2];
+    } else {
+      accessToken = result;
+    }
 
     if (!accessToken) { throw new TokenError('Invalid refresh token', 'invalid_grant'); }
     if (refreshToken && typeof refreshToken == 'object') {
