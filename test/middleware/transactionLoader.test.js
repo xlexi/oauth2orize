@@ -9,6 +9,8 @@ var chai = require('chai')
 
 describe('transactionLoader', function() {
 
+  function next() {}
+
   var server = new Server();
   server.deserializeClient(function(id) {
     if (id === '1') { return { id: id, name: 'Test' }; }
@@ -41,7 +43,7 @@ describe('transactionLoader', function() {
       };
 
       try{
-        await transactionLoader(server)(ctx);
+        await transactionLoader(server)(ctx, next);
       } catch(e) {
         err = e;
       }
@@ -84,7 +86,7 @@ describe('transactionLoader', function() {
       };
 
       try{
-        await transactionLoader(server)(ctx);
+        await transactionLoader(server)(ctx, next);
       } catch(e) {
         err = e;
       }
@@ -127,7 +129,7 @@ describe('transactionLoader', function() {
       };
 
       try{
-        await transactionLoader(server)(ctx);
+        await transactionLoader(server)(ctx, next);
       } catch(e) {
         err = e;
       }
@@ -166,7 +168,7 @@ describe('transactionLoader', function() {
       };
 
       try{
-        await transactionLoader(server)(ctx);
+        await transactionLoader(server)(ctx, next);
       } catch(e) {
         err = e;
       }
@@ -197,7 +199,7 @@ describe('transactionLoader', function() {
       ctx.session.authorize = {};
 
       try{
-        await transactionLoader(server)(ctx);
+        await transactionLoader(server)(ctx, next);
       } catch(e) {
         err = e;
       }
@@ -226,7 +228,7 @@ describe('transactionLoader', function() {
       ctx.session.authorize = {};
 
       try{
-        await transactionLoader(server)(ctx);
+        await transactionLoader(server)(ctx, next);
       } catch(e) {
         err = e;
       }
@@ -254,7 +256,7 @@ describe('transactionLoader', function() {
       ctx.session = {};
 
       try{
-        await transactionLoader(server)(ctx);
+        await transactionLoader(server)(ctx, next);
       } catch(e) {
         err = e;
       }
@@ -280,7 +282,7 @@ describe('transactionLoader', function() {
       ctx = new Context();
 
       try{
-        await transactionLoader(server)(ctx);
+        await transactionLoader(server)(ctx, next);
       } catch(e) {
         err = e;
       }
@@ -314,7 +316,7 @@ describe('transactionLoader', function() {
         };
 
         try{
-          await transactionLoader(server, { transactionField: 'txn_id' })(ctx);
+          await transactionLoader(server, { transactionField: 'txn_id' })(ctx, next);
         } catch(e) {
           err = e;
         }
@@ -358,7 +360,7 @@ describe('transactionLoader', function() {
         };
 
         try{
-          await transactionLoader(server, { sessionKey: 'oauth2orize' })(ctx);
+          await transactionLoader(server, { sessionKey: 'oauth2orize' })(ctx, next);
         } catch(e) {
           err = e;
         }

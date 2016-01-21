@@ -9,6 +9,8 @@ var chai = require('chai')
 
 describe('authorization', function() {
 
+  function next() {}
+
   var server = new Server();
   server.serializeClient(function(client) {
     if (client.id == '1234' || client.id == '2234' || client.id == '3234') { return client.id; }
@@ -72,7 +74,7 @@ describe('authorization', function() {
       ctx.session = {};
 
       try {
-        await authorization(server, validate)(ctx);
+        await authorization(server, validate)(ctx, next);
       } catch(e) {
         err = e;
       }
@@ -117,7 +119,7 @@ describe('authorization', function() {
       ctx.session = {};
 
       try{
-        await authorization(server, validate)(ctx);
+        await authorization(server, validate)(ctx, next);
       } catch(e) {
         err = e;
       }
@@ -146,7 +148,7 @@ describe('authorization', function() {
       ctx.session = {};
 
       try{
-        await authorization(server, validate)(ctx);
+        await authorization(server, validate)(ctx, next);
       } catch(e) {
         err = e;
       }
@@ -175,7 +177,7 @@ describe('authorization', function() {
       ctx.session = {};
 
       try{
-        await authorization(server, validate)(ctx);
+        await authorization(server, validate)(ctx, next);
       } catch(e) {
         err = e;
       }
@@ -206,7 +208,7 @@ describe('authorization', function() {
       ctx.session = {};
 
       try{
-        await authorization(server, validate)(ctx);
+        await authorization(server, validate)(ctx, next);
       } catch(e) {
         err = e;
       }
@@ -237,7 +239,7 @@ describe('authorization', function() {
       ctx.session = {};
 
       try{
-        await authorization(server, validate)(ctx);
+        await authorization(server, validate)(ctx, next);
       } catch(e) {
         err = e;
       }
@@ -264,7 +266,7 @@ describe('authorization', function() {
       ctx.session = {};
 
       try{
-        await authorization(server, validate)(ctx);
+        await authorization(server, validate)(ctx, next);
       } catch(e) {
         err = e;
       }
@@ -293,7 +295,7 @@ describe('authorization', function() {
       ctx.session = {};
 
       try{
-        await authorization(server, validate)(ctx);
+        await authorization(server, validate)(ctx, next);
       } catch(e) {
         err = e;
       }
@@ -326,7 +328,7 @@ describe('authorization', function() {
       ctx.request.query = { response_type: 'code', client_id: '1234', redirect_uri: 'http://example.com/auth/callback' };
 
       try{
-        await authorization(server, validate)(ctx);
+        await authorization(server, validate)(ctx, next);
       } catch(e) {
         err = e;
       }
@@ -361,7 +363,7 @@ describe('authorization', function() {
         ctx.session = {};
 
         try{
-          await authorization(server, validate)(ctx);
+          await authorization(server, validate)(ctx, next);
         } catch(e) {
           err = e;
         }
@@ -417,7 +419,7 @@ describe('authorization', function() {
         ctx.session = {};
 
         try{
-          await authorization(server, validate)(ctx);
+          await authorization(server, validate)(ctx, next);
         } catch(e) {
           err = e;
         }
@@ -473,7 +475,7 @@ describe('authorization', function() {
         ctx.session = {};
 
         try{
-          await authorization(server, validate)(ctx);
+          await authorization(server, validate)(ctx, next);
         } catch(e) {
           err = e;
         }
@@ -520,7 +522,7 @@ describe('authorization', function() {
         ctx.session = {};
 
         try{
-          await authorization(server, { idLength: 12 }, validate)(ctx);
+          await authorization(server, { idLength: 12 }, validate)(ctx, next);
         } catch(e) {
           err = e;
         }
@@ -567,7 +569,7 @@ describe('authorization', function() {
         ctx.session = {};
 
         try{
-          await authorization(server, { sessionKey: 'oauth2z' }, validate)(ctx);
+          await authorization(server, { sessionKey: 'oauth2z' }, validate)(ctx, next);
         } catch(e) {
           err = e;
         }
@@ -626,7 +628,7 @@ describe('authorization', function() {
         ctx.session = {};
 
         try{
-          await authorization(server, validate)(ctx);
+          await authorization(server, validate)(ctx, next);
         } catch(e) {
           err = e;
         }

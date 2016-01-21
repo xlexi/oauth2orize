@@ -51,7 +51,7 @@ describe('Server', function() {
     it('should create function handler', function() {
       var handler = server.authorization(function(){});
       expect(handler).to.be.an('function');
-      expect(handler).to.have.length(1);
+      expect(handler).to.have.length(2);
     });
   });
 
@@ -63,7 +63,7 @@ describe('Server', function() {
       expect(handler).to.be.an('array');
       expect(handler).to.have.length(2);
       expect(handler[0]).to.be.a('function');
-      expect(handler[0]).to.have.length(1);
+      expect(handler[0]).to.have.length(2);
       expect(handler[1]).to.be.a('function');
       expect(handler[1]).to.have.length(2);
     });

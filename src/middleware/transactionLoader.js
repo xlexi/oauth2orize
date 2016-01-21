@@ -32,7 +32,7 @@ module.exports = function(server, options) {
   var field = options.transactionField || 'transaction_id'
     , key = options.sessionKey || 'authorize';
 
-  return async function transactionLoader(ctx) {
+  return async function transactionLoader(ctx, next) {
     if (!ctx.session) { throw new Error('OAuth2orize requires session support. Did you forget app.use(express.session(...))?'); }
     if (!ctx.session[key]) { throw new ForbiddenError('Unable to load OAuth 2.0 transactions from session'); }
 
@@ -59,5 +59,7 @@ module.exports = function(server, options) {
     ctx.state.oauth2.redirectURI = txn.redirectURI;
     ctx.state.oauth2.req = txn.req;
     ctx.state.oauth2.info = txn.info;
+
+    await next();
   };
 };

@@ -9,6 +9,7 @@ var chai = require('chai')
 
 describe('authorization', function() {
 
+  function next() {}
   var server = new Server();
   server.serializeClient(function(client) {
     return client.id;
@@ -64,7 +65,7 @@ describe('authorization', function() {
       ctx.state.user = { id: 'u123' };
 
       try{
-        await authorization(server, validate, immediate)(ctx);
+        await authorization(server, validate, immediate)(ctx, next);
       } catch(e) {
         err = e;
       }
@@ -99,7 +100,7 @@ describe('authorization', function() {
       ctx.state.user = { id: 'u123' };
 
       try{
-        await authorization(server, validate, immediate)(ctx);
+        await authorization(server, validate, immediate)(ctx, next);
       } catch(e) {
         err = e;
       }
@@ -137,7 +138,7 @@ describe('authorization', function() {
       ctx.state.user = { id: 'u123' };
 
       try{
-        await authorization(server, validate, immediate)(ctx);
+        await authorization(server, validate, immediate)(ctx, next);
       } catch(e) {
         err = e;
       }
@@ -169,7 +170,7 @@ describe('authorization', function() {
       ctx.state.user = { id: 'u123' };
 
       try{
-        await authorization(server, validate, immediate)(ctx);
+        await authorization(server, validate, immediate)(ctx, next);
       } catch(e) {
         err = e;
       }
@@ -201,7 +202,7 @@ describe('authorization', function() {
       ctx.state.user = { id: 'u123' };
 
       try{
-        await authorization(server, validate, immediate)(ctx);
+        await authorization(server, validate, immediate)(ctx, next);
       } catch(e) {
         err = e;
       }
@@ -233,7 +234,7 @@ describe('authorization', function() {
       ctx.state.user = { id: 'u123' };
 
       try{
-        await authorization(server, validate, immediate)(ctx);
+        await authorization(server, validate, immediate)(ctx, next);
       } catch(e) {
         err = e;
       }
@@ -273,7 +274,7 @@ describe('authorization', function() {
         ctx.state.user = { id: 'u123' };
 
         try{
-          await authorization(server, validate, immediate)(ctx);
+          await authorization(server, validate, immediate)(ctx, next);
         } catch(e) {
           err = e;
         }
@@ -319,7 +320,7 @@ describe('authorization', function() {
         ctx.state.user = { id: 'u123' };
 
         try{
-          await authorization(server, validate, immediate)(ctx);
+          await authorization(server, validate, immediate)(ctx, next);
         } catch(e) {
           err = e;
         }
@@ -372,7 +373,7 @@ describe('authorization', function() {
         ctx.state.user = { id: 'u123' };
 
         try{
-          await authorization(server, validate, immediate)(ctx);
+          await authorization(server, validate, immediate)(ctx, next);
         } catch(e) {
           err = e;
         }
@@ -419,7 +420,7 @@ describe('authorization', function() {
         ctx.state.user = { id: 'u123' };
 
         try{
-          await authorization(server, validate, immediate)(ctx);
+          await authorization(server, validate, immediate)(ctx, next);
         } catch(e) {
           err = e;
         }
@@ -474,7 +475,7 @@ describe('authorization', function() {
         ctx.state.user = { id: 'u123' };
 
         try{
-          await authorization(server, validate, immediate)(ctx);
+          await authorization(server, validate, immediate)(ctx, next);
         } catch(e) {
           err = e;
         }
@@ -545,7 +546,7 @@ describe('authorization', function() {
         ctx.state.user = { id: 'u123' };
 
         try{
-          await authorization(server, validate, immediate)(ctx);
+          await authorization(server, validate, immediate)(ctx, next);
         } catch(e) {
           err = e;
         }

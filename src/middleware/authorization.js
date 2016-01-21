@@ -111,7 +111,7 @@ module.exports = function(server, options, validate, immediate) {
     , userProperty = options.userProperty || 'user'
     , key = options.sessionKey || 'authorize';
 
-  return async function authorization(ctx) {
+  return async function authorization(ctx, next) {
     if (!ctx.session) { throw new Error('OAuth2orize requires session support. Did you forget app.use(express.session(...))?'); }
 
     var body = ctx.request.body || {}
@@ -213,6 +213,8 @@ module.exports = function(server, options, validate, immediate) {
       // store transaction in session
       var txns = ctx.session[key] = ctx.session[key] || {};
       txns[tid] = txn;
+
+      await next();
     }
   };
 };
