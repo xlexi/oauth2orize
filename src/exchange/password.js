@@ -17,14 +17,14 @@ var utils = require('../utils')
  * This middleware requires an `issue` callback, for which the function
  * signature is as follows:
  *
- *     function(client, username, password, scope, done) { ... }
+ *     async function(client, username, password, scope) { ... }
  *
  * `client` is the authenticated client instance attempting to obtain an access
  * token.  `username` and `password` and the resource owner's credentials.
- * `scope` is the scope of access requested by the client.  `done` is called to
+ * `scope` is the scope of access requested by the client.  `return` to
  * issue an access token:
  *
- *     done(err, accessToken, refreshToken, params)
+ *     return [accessToken, refreshToken, params]
  *
  * `accessToken` is the access token that will be sent to the client.  An
  * optional `refreshToken` will be sent to the client, if the server chooses to
@@ -39,11 +39,9 @@ var utils = require('../utils')
  *
  * Examples:
  *
- *     server.exchange(oauth2orize.exchange.password(function(client, username, password, scope, done) {
- *       AccessToken.create(client, username, password, scope, function(err, accessToken) {
- *         if (err) { return done(err); }
- *         done(null, accessToken);
- *       });
+ *     server.exchange(oauth2orize.exchange.password(async function(client, username, password, scope) {
+ *       let accessToken = await AccessToken.create(client, username, password, scope);
+ *       return accessToken
  *     }));
  *
  * References:
