@@ -153,8 +153,8 @@ module.exports = function token(options, issue) {
 
     var arity = issue.length;
     var result;
-    if (arity == 3) {
-      result = await issue(txn.client, txn.user, txn.res);
+    if (arity == 4) {
+      result = await issue(txn.client, txn.user, txn.res, txn.req);
     } else { // arity == 2
       result = await issue(txn.client, txn.user);
     }
